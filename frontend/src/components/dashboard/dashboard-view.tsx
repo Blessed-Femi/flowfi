@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import toast from "react-hot-toast";
 
 /**
@@ -51,6 +52,31 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CancelConfirmModal } from "../stream-creation/CancelConfirmModal";
 import { StreamDetailsModal } from "./StreamDetailsModal";
 import { Button } from "../ui/Button";
+
+// @ts-expect-error unused var
+const DashboardOverviewDynamic = dynamic(() => import("./DashboardOverview"), {
+  ssr: false,
+});
+// @ts-expect-error unused var
+const DashboardIncomingDynamic = dynamic(() => import("./DashboardIncoming"), {
+  ssr: false,
+});
+// @ts-expect-error unused var
+const DashboardOutgoingDynamic = dynamic(() => import("./DashboardOutgoing"), {
+  ssr: false,
+});
+// @ts-expect-error unused var
+const DashboardPausedDynamic = dynamic(() => import("./DashboardPaused"), {
+  ssr: false,
+});
+// @ts-expect-error unused var
+const DashboardActivityDynamic = dynamic(() => import("./DashboardActivity"), {
+  ssr: false,
+});
+// @ts-expect-error unused var
+const DashboardSettingsDynamic = dynamic(() => import("./DashboardSettings"), {
+  ssr: false,
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,8 +169,8 @@ function DashboardSkeleton() {
   );
 }
 
-/** Generic empty state with an optional CTA */
-function EmptyState({
+/** Generic empty state with an optional CTE */
+export function EmptyState({
   icon,
   title,
   description,
@@ -207,7 +233,7 @@ function ErrorState({
 
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
 
-function BoltIcon() {
+export function BoltIcon() {
   return (
     <svg
       className="h-10 w-10 text-accent"
@@ -225,7 +251,7 @@ function BoltIcon() {
   );
 }
 
-function InboxIcon() {
+export function InboxIcon() {
   return (
     <svg
       className="h-10 w-10 text-accent"
@@ -243,7 +269,7 @@ function InboxIcon() {
   );
 }
 
-function ActivityIcon() {
+export function ActivityIcon() {
   return (
     <svg
       className="h-10 w-10 text-accent"
@@ -351,12 +377,10 @@ function renderAnalytics(snapshot: DashboardSnapshot | null) {
             >
               <p>{metric.label}</p>
               <h2>
-                {isUnavailable
-                  ? "No data"
-                  : formatAnalyticsValue(metric.value!, metric.format)}
+                {isUnavailable ? "No data" : formatAnalyticsValue(metric.value!, metric.format)}
               </h2>
               <span>
-                {isUnavailable ? metric.unavailableText : metric.detail}
+                {isUnavailable ? "No data" : metric.detail}
               </span>
             </article>
           );
@@ -545,9 +569,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
             .then(setSnapshot)
             .catch((err) => {
               setSnapshotError(
-                err instanceof Error
-                  ? err.message
-                  : "Failed to refresh dashboard",
+                err instanceof Error ? err.message : "Failed to refresh dashboard",
               );
             });
         }
@@ -649,9 +671,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
         if (!cancelled) {
           setSnapshot(null);
           setSnapshotError(
-            err instanceof Error
-              ? err.message
-              : "Failed to fetch dashboard data.",
+            err instanceof Error ? err.message : "Failed to fetch dashboard data.",
           );
         }
       } finally {
@@ -761,7 +781,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
     setStreamFormMessage(null);
   };
 
-  // ── Optimistic helpers ────────────────────────────────────────────────────
+  // ── Optimistic helpers ─────────────────────────────────────────────────────
 
   const removeStreamLocally = (streamId: string) => {
     queryClient.setQueryData<DashboardSnapshot | undefined>(dashboardQueryKey(session.publicKey), (prev) => {
@@ -982,7 +1002,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       );
     }
 
-    // ── Overview ──────────────────────────────────────────────────────────
+    // ── Overview (default tab, rendered synchronously) ─────────────────────
     if (activeTab === "overview") {
       return (
         <div className="dashboard-content-stack mt-8">
@@ -999,354 +1019,71 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       );
     }
 
-    // ── Incoming ──────────────────────────────────────────────────────────
+    // ── Non-default tabs: lazy-loaded via next/dynamic ─────────────────────
+    const tabComponents: Record<string, React.ComponentType> = {
+      incoming: DashboardIncomingDynamic,
+      outgoing: DashboardOutgoingDynamic,
+      paused: DashboardPausedDynamic,
+      activity: DashboardActivityDynamic,
+      settings: DashboardSettingsDynamic,
+    };
+
+    const TabComponent = tabComponents[activeTab];
+    if (!TabComponent) {
+      return (
+        <div className="dashboard-empty-state mt-8">
+          <h2>Under Construction</h2>
+          <p>This tab is currently under development.</p>
+        </div>
+      );
+    }
+
+    // Pass required props to each tab component
     if (activeTab === "incoming") {
-      if (snapshot!.incomingStreams.length === 0) {
-        return (
-          <EmptyState
-            icon={<InboxIcon />}
-            title="No incoming streams yet"
-            description="No streams are sending you funds yet. Share your wallet address with a sender to receive streaming payments."
-          />
-        );
-      }
       return (
-        <div className="mt-8">
-          <IncomingStreams
-            streams={snapshot!.incomingStreams}
-            onWithdraw={handleIncomingWithdraw}
-            withdrawingStreamId={withdrawingIncomingStreamId}
-          />
-        </div>
+        <DashboardIncomingDynamic
+          incomingStreams={snapshot!.incomingStreams}
+          onWithdraw={handleIncomingWithdraw}
+          withdrawingStreamId={withdrawingIncomingStreamId}
+        />
       );
     }
 
-    // ── Outgoing ──────────────────────────────────────────────────────────
     if (activeTab === "outgoing") {
-      const activeOutgoing = snapshot!.outgoingStreams.filter(
-        (s) => s.status === "Active",
-      );
-      if (activeOutgoing.length === 0) {
-        return (
-          <EmptyState
-            icon={<BoltIcon />}
-            title="No active outgoing streams"
-            description="You don't have any active outgoing payment streams. Create one to start streaming tokens to a recipient."
-            action={
-              <Button onClick={() => setShowWizard(true)} glow>
-                Create a Stream
-              </Button>
-            }
-          />
-        );
-      }
       return (
-        <div className="mt-8">
-          {renderStreams(
-            { ...snapshot!, outgoingStreams: activeOutgoing },
-            (s) => setModal({ type: "topup", stream: s }),
-            (s) => setModal({ type: "cancel", stream: s }),
-            (s) => setModal({ type: "details", stream: s }),
-          )}
-        </div>
+        <DashboardOutgoingDynamic
+          outgoingStreams={snapshot!.outgoingStreams}
+          onTopUp={(s) => setModal({ type: "topup", stream: s })}
+          onCancel={(s) => setModal({ type: "cancel", stream: s })}
+          onShowDetails={(s) => setModal({ type: "details", stream: s })}
+        />
       );
     }
 
-    // ── Paused ────────────────────────────────────────────────────────────
     if (activeTab === "paused") {
-      const pausedStreams = [
-        ...snapshot!.outgoingStreams.filter((s) => s.status === "Paused"),
-        ...snapshot!.incomingStreams.filter((s) => s.status === "Paused"),
-      ];
-      if (pausedStreams.length === 0) {
-        return (
-          <div className="glass-card p-12 rounded-3xl border-slate-800 text-center text-slate-400 mt-8">
-            No paused streams found.
-          </div>
-        );
-      }
       return (
-        <div className="mt-8 glass-card rounded-3xl border-slate-800 overflow-hidden">
-          <table className="dashboard-table w-full">
-            <thead>
-              <tr>
-                <th>Stream ID</th>
-                <th>Counterparty</th>
-                <th>Token</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pausedStreams.map((s) => (
-                <tr key={s.id}>
-                  <td>#{s.id}</td>
-                  <td className="font-mono text-xs">{s.recipient}</td>
-                  <td>{s.token}</td>
-                  <td>
-                    <span className="px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-xs font-bold">
-                      Paused
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DashboardPausedDynamic
+          outgoingStreams={snapshot!.outgoingStreams}
+          incomingStreams={snapshot!.incomingStreams}
+        />
       );
     }
 
-    // ── Activity ──────────────────────────────────────────────────────────
     if (activeTab === "activity") {
       return (
-        <div className="mt-8">
-          {renderRecentActivity(snapshot, () => setShowWizard(true))}
-        </div>
+        <DashboardActivityDynamic
+          recentActivity={snapshot!.recentActivity}
+          onCreateStream={() => setShowWizard(true)}
+        />
       );
     }
 
-    // ── Settings ──────────────────────────────────────────────────────────
     if (activeTab === "settings") {
       return (
-        <div className="dashboard-content-stack mt-8">
-          <section className="dashboard-panel dashboard-panel--stream-builder">
-            <div className="dashboard-panel__header">
-              <h3>Create Stream</h3>
-              <span>Save and reuse recurring configurations</span>
-            </div>
-
-            {streamFormMessage ? (
-              <p
-                className="stream-form-message"
-                data-tone={streamFormMessage.tone}
-              >
-                {streamFormMessage.text}
-              </p>
-            ) : null}
-
-            <div className="stream-template-layout">
-              <div className="stream-template-manager">
-                <h4>Template Library</h4>
-                <p>
-                  Save recurring stream settings once, apply instantly, then
-                  override before submitting.
-                </p>
-
-                <div className="stream-template-editor">
-                  <input
-                    value={templateNameInput}
-                    onChange={(e) => setTemplateNameInput(e.target.value)}
-                    placeholder="e.g. Monthly Contributor Payroll"
-                    aria-label="Template name"
-                  />
-                  <div className="stream-template-editor__actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={!isTemplateNameValid}
-                      onClick={handleSaveTemplate}
-                    >
-                      {saveTemplateButtonLabel}
-                    </button>
-                    {editingTemplateId ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={handleClearTemplateEditor}
-                      >
-                        Stop Editing
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {templates.length === 0 ? (
-                  <div className="mini-empty-state">
-                    <p>No templates yet. Save your first stream setup.</p>
-                  </div>
-                ) : (
-                  <ul className="stream-template-list">
-                    {templates.map((t) => (
-                      <li
-                        key={t.id}
-                        className="stream-template-item"
-                        data-active={
-                          selectedTemplateId === t.id ? "true" : undefined
-                        }
-                      >
-                        <div className="stream-template-item__meta">
-                          <strong>{t.name}</strong>
-                          <small>
-                            Updated {formatTemplateUpdatedAt(t.updatedAt)}
-                          </small>
-                        </div>
-                        <div className="stream-template-item__actions">
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            onClick={() => handleApplyTemplate(t.id)}
-                          >
-                            Apply
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            onClick={() => handleEditTemplate(t.id)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button secondary-button--danger"
-                            onClick={() => handleDeleteTemplate(t.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <form className="stream-form" onSubmit={handleFormCreateStream}>
-                <div className="stream-form__meta">
-                  <div>
-                    <h4>Stream Configuration</h4>
-                    <p>
-                      {requiredFieldsCompleted} / 5 required fields completed
-                    </p>
-                  </div>
-                  <label className="stream-form__template-select">
-                    Load template
-                    <select
-                      value={selectedTemplateId ?? ""}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        if (!id) {
-                          setSelectedTemplateId(null);
-                          return;
-                        }
-                        handleApplyTemplate(id);
-                      }}
-                    >
-                      <option value="">Select saved template</option>
-                      {templates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <label>
-                  Recipient Address
-                  <input
-                    required
-                    type="text"
-                    value={streamForm.recipient}
-                    onChange={(e) =>
-                      updateStreamForm("recipient", e.target.value)
-                    }
-                    placeholder="G..."
-                  />
-                </label>
-                <div className="stream-form__row">
-                  <label>
-                    Token
-                    <input
-                      required
-                      type="text"
-                      value={streamForm.token}
-                      onChange={(e) =>
-                        updateStreamForm("token", e.target.value.toUpperCase())
-                      }
-                      placeholder="USDC"
-                    />
-                  </label>
-                  <label>
-                    Total Amount
-                    <input
-                      required
-                      type="number"
-                      min="0"
-                      step="0.0000001"
-                      value={streamForm.totalAmount}
-                      onChange={(e) =>
-                        updateStreamForm("totalAmount", e.target.value)
-                      }
-                      placeholder="100"
-                    />
-                  </label>
-                </div>
-                <div className="stream-form__row">
-                  <label>
-                    Starts At
-                    <input
-                      required
-                      type="datetime-local"
-                      value={streamForm.startsAt}
-                      onChange={(e) =>
-                        updateStreamForm("startsAt", e.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    Ends At
-                    <input
-                      required
-                      type="datetime-local"
-                      value={streamForm.endsAt}
-                      onChange={(e) =>
-                        updateStreamForm("endsAt", e.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-                <div className="stream-form__row">
-                  <label>
-                    Cadence (seconds)
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={streamForm.cadenceSeconds}
-                      onChange={(e) =>
-                        updateStreamForm("cadenceSeconds", e.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-                <label>
-                  Note
-                  <textarea
-                    value={streamForm.note}
-                    onChange={(e) => updateStreamForm("note", e.target.value)}
-                    placeholder="Optional internal note for this stream configuration."
-                  />
-                </label>
-
-                <div className="stream-form__actions">
-                  <button
-                    type="submit"
-                    className="wallet-button"
-                    disabled={isFormSubmitting}
-                  >
-                    {isFormSubmitting ? "Submitting..." : "Create Stream"}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={isFormSubmitting}
-                    onClick={handleResetStreamForm}
-                  >
-                    Reset
-                  </button>
-                </div>
-              </form>
-            </div>
-          </section>
-        </div>
+        <DashboardSettingsDynamic
+          session={session}
+          onDisconnect={onDisconnect}
+        />
       );
     }
 
