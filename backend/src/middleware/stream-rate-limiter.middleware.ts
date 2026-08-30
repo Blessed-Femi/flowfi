@@ -1,4 +1,4 @@
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, type Options } from 'express-rate-limit';
 import { type Request, type Response, type NextFunction } from 'express';
 import type { AuthenticatedRequest } from '../types/auth.types.js';
 import logger from '../logger.js';
@@ -44,7 +44,7 @@ export function createStreamRateLimiter(
      * Skip rate limiting for non-authenticated requests
      * to ensure we only rate limit authenticated users
      */
-    skip: (req: Request, res: Response): boolean => {
+    skip: (req: Request, _res: Response): boolean => {
       const authReq = req as AuthenticatedRequest;
       if (!authReq.user?.publicKey) {
         logger.warn('Stream creation rate limiter skipped: no authenticated user');
@@ -52,7 +52,7 @@ export function createStreamRateLimiter(
       }
       return false;
     },
-    handler: (req: Request, res: Response, next: NextFunction, options: any): void => {
+    handler: (req: Request, res: Response, _next: NextFunction, options: Options): void => {
       const authReq = req as AuthenticatedRequest;
       logger.warn(
         `Rate limit exceeded for wallet: ${authReq.user?.publicKey || 'unknown'}`,

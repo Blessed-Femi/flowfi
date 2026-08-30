@@ -19,7 +19,7 @@ interface CacheItem<T> {
 }
 
 class MemoryCache {
-  private cache = new Map<string, CacheItem<any>>();
+  private cache = new Map<string, CacheItem<unknown>>();
   private hits = 0;
   private misses = 0;
 
@@ -35,7 +35,7 @@ class MemoryCache {
       return null;
     }
     this.hits++;
-    return item.value;
+    return item.value as T;
   }
 
   set<T>(key: string, value: T, ttlSeconds: number): void {

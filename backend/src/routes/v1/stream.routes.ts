@@ -259,7 +259,7 @@ router.post('/:streamId/resume', requireAuth, resumeStream);
  *       409:
  *         description: Conflict - no claimable balance available
  */
-router.post('/:streamId/withdraw', requireAuth, withdrawHandler as any);
+router.post('/:streamId/withdraw', requireAuth, withdrawHandler);
 
 /**
  * @openapi
@@ -315,6 +315,6 @@ router.post('/:streamId/withdraw', requireAuth, withdrawHandler as any);
  *         description: Stream not found
  */
 router.post('/:streamId/top-up', requireAuth, topUpStreamHandler);
-router.post('/:streamId/cancel', requireAuth, cancelStreamHandler as any);
+router.post('/:streamId/cancel', requireAuth, cancelStreamHandler);
 
 export default router;

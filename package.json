@@ -21,6 +21,9 @@
   "lint-staged": {
     "frontend/**/*.{ts,tsx,js,jsx}": [
       "npm run lint --workspace=frontend --"
+    ],
+    "backend/**/*.{ts,tsx,js}": [
+      "npm run lint --workspace=backend --"
     ]
   },
   "dependencies": {
