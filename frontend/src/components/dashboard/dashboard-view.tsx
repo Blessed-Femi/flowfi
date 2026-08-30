@@ -49,6 +49,7 @@ import {
 import { TopUpModal } from "../stream-creation/TopUpModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { CancelConfirmModal } from "../stream-creation/CancelConfirmModal";
+import { ConfirmModal } from "../stream-creation/ConfirmModal";
 import { StreamDetailsModal } from "./StreamDetailsModal";
 import { Button } from "../ui/Button";
 
@@ -68,7 +69,8 @@ type ModalState =
   | null
   | { type: "topup"; stream: Stream }
   | { type: "cancel"; stream: Stream }
-  | { type: "details"; stream: Stream };
+  | { type: "details"; stream: Stream }
+  | { type: "deleteTemplate"; templateId: string; templateName: string };
 
 interface StreamFormValues {
   recipient: string;
@@ -771,13 +773,17 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const handleDeleteTemplate = (templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
     if (!template) return;
-    if (!window.confirm(`Delete stream template "${template.name}"?`)) return;
+    setModal({ type: "deleteTemplate", templateId: template.id, templateName: template.name });
+  };
+
+  const handleDeleteTemplateConfirm = (templateId: string) => {
     setTemplates((prev) => prev.filter((t) => t.id !== templateId));
     if (selectedTemplateId === templateId) setSelectedTemplateId(null);
     if (editingTemplateId === templateId) {
       setEditingTemplateId(null);
       setTemplateNameInput("");
     }
+    setModal(null);
   };
 
   const handleResetStreamForm = () => {
@@ -1487,6 +1493,17 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
             setModal({ type: "cancel", stream: modal.stream })
           }
           onTopUpClick={() => setModal({ type: "topup", stream: modal.stream })}
+        />
+      )}
+      {modal?.type === "deleteTemplate" && (
+        <ConfirmModal
+          title="Delete Template?"
+          message={`Are you sure you want to delete "${modal.templateName}"? This action cannot be undone.`}
+          confirmLabel="Delete Template"
+          cancelLabel="Keep Template"
+          variant="danger"
+          onConfirm={() => handleDeleteTemplateConfirm(modal.templateId)}
+          onClose={() => setModal(null)}
         />
       )}
     </main>
