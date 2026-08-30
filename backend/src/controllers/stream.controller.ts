@@ -770,7 +770,7 @@ export const topUpStreamHandler = async (req: Request, res: Response) => {
     return res
       .status(200)
       .json({ streamId, txHash, depositedAmount: updatedStream!.depositedAmount });
-  } catch (error: any) {
+  } catch (error) {
     logger.error(`[topUp] stream=${streamId} error:`, error);
     return res.status(400).json({ error: 'Failed to top up stream on chain', message: error instanceof Error ? error.message : 'Unknown error' });
   }
