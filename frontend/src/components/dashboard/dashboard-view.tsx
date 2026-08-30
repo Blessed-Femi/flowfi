@@ -17,7 +17,7 @@ import toast from "react-hot-toast";
 
 import {
   getDashboardAnalytics,
-  fetchDashboardData,
+  useDashboard,
   dashboardQueryKey,
   type DashboardSnapshot,
   type Stream,
@@ -511,11 +511,20 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const [showWizard, setShowWizard] = React.useState(false);
   const [modal, setModal] = React.useState<ModalState>(null);
 
-  const [snapshot, setSnapshot] = React.useState<DashboardSnapshot | null>(
-    null,
-  );
-  const [isSnapshotLoading, setIsSnapshotLoading] = React.useState(true);
-  const [snapshotError, setSnapshotError] = React.useState<string | null>(null);
+  const {
+    data: snapshotData,
+    isLoading: isSnapshotLoading,
+    isError: isSnapshotError,
+    error: snapshotErrorObj,
+    refetch: refetchSnapshot,
+  } = useDashboard(session.publicKey);
+
+  const snapshot: DashboardSnapshot | null = snapshotData ?? null;
+  const snapshotError = isSnapshotError
+    ? snapshotErrorObj instanceof Error
+      ? snapshotErrorObj.message
+      : "Failed to fetch dashboard data."
+    : null;
 
   const {
     events: streamEvents,
@@ -541,15 +550,9 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
           "resumed",
         ];
         if (relevantTypes.includes(latestEvent.type)) {
-          fetchDashboardData(session.publicKey)
-            .then(setSnapshot)
-            .catch((err) => {
-              setSnapshotError(
-                err instanceof Error
-                  ? err.message
-                  : "Failed to refresh dashboard",
-              );
-            });
+          void queryClient.invalidateQueries({
+            queryKey: dashboardQueryKey(session.publicKey),
+          });
         }
       }
     }
@@ -618,51 +621,6 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
     if (!templatesHydrated) return;
     persistTemplates(templates);
   }, [templates, templatesHydrated]);
-
-  // ── Load dashboard snapshot ───────────────────────────────────────────────
-
-  const loadSnapshot = React.useCallback(async () => {
-    setIsSnapshotLoading(true);
-    setSnapshotError(null);
-    try {
-      const next = await fetchDashboardData(session.publicKey);
-      setSnapshot(next);
-    } catch (err) {
-      setSnapshot(null);
-      setSnapshotError(
-        err instanceof Error ? err.message : "Failed to fetch dashboard data.",
-      );
-    } finally {
-      setIsSnapshotLoading(false);
-    }
-  }, [session.publicKey, setIsSnapshotLoading, setSnapshotError, setSnapshot]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setIsSnapshotLoading(true);
-      setSnapshotError(null);
-      try {
-        const next = await fetchDashboardData(session.publicKey);
-        if (!cancelled) setSnapshot(next);
-      } catch (err) {
-        if (!cancelled) {
-          setSnapshot(null);
-          setSnapshotError(
-            err instanceof Error
-              ? err.message
-              : "Failed to fetch dashboard data.",
-          );
-        }
-      } finally {
-        if (!cancelled) setIsSnapshotLoading(false);
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [session.publicKey]);
 
   // ── Template handlers ─────────────────────────────────────────────────────
 
@@ -779,15 +737,18 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   };
 
   const topUpStreamLocally = (streamId: string, amount: number) => {
-    setSnapshot((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        outgoingStreams: prev.outgoingStreams.map((s) =>
-          s.id === streamId ? { ...s, deposited: s.deposited + amount } : s,
-        ),
-      };
-    });
+    queryClient.setQueryData<DashboardSnapshot | undefined>(
+      dashboardQueryKey(session.publicKey),
+      (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          outgoingStreams: prev.outgoingStreams.map((s) =>
+            s.id === streamId ? { ...s, deposited: s.deposited + amount } : s,
+          ),
+        };
+      },
+    );
   };
 
   const addStreamLocally = (data: StreamFormData) => {
@@ -804,14 +765,17 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       lastUpdateTime: Math.floor(Date.now() / 1000),
       isActive: true,
     };
-    setSnapshot((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        outgoingStreams: [newStream, ...prev.outgoingStreams],
-        activeStreamsCount: prev.activeStreamsCount + 1,
-      };
-    });
+    queryClient.setQueryData<DashboardSnapshot | undefined>(
+      dashboardQueryKey(session.publicKey),
+      (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          outgoingStreams: [newStream, ...prev.outgoingStreams],
+          activeStreamsCount: prev.activeStreamsCount + 1,
+        };
+      },
+    );
   };
 
   // ── Contract handlers ─────────────────────────────────────────────────────
@@ -872,8 +836,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       await sorobanWithdraw(session, {
         streamId: BigInt(stream.id.replace(/\D/g, "") || "0"),
       });
-      const refreshed = await fetchDashboardData(session.publicKey);
-      setSnapshot(refreshed);
+      await refetchSnapshot();
       toast.success("Withdrawal successful!", { id: toastId });
     } catch (err) {
       toast.error(toSorobanErrorMessage(err), { id: toastId });
@@ -958,7 +921,12 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
 
     // ── Error state ───────────────────────────────────────────────────────
     if (snapshotError) {
-      return <ErrorState message={snapshotError} onRetry={loadSnapshot} />;
+      return (
+        <ErrorState
+          message={snapshotError}
+          onRetry={() => void refetchSnapshot()}
+        />
+      );
     }
 
     // ── First-time / completely empty wallet ──────────────────────────────
