@@ -27,7 +27,7 @@ export interface StreamFormData {
 
 interface StreamCreationWizardProps {
   onClose: () => void;
-  onSubmit: (data: StreamFormData) => Promise<void>;
+  onSubmit: (data: StreamFormData) => Promise<{ txHash: string }>;
   walletPublicKey?: string;
 }
 
@@ -381,9 +381,8 @@ export const StreamCreationWizard: React.FC<StreamCreationWizardProps> = ({
       setIsSubmitting(true);
       try {
         // Step 1: Submit transaction
-        const result = (await onSubmit(formData)) as unknown as { txHash: string };
-        const hash = result?.txHash;
-        setTxHash(hash);
+        const result = await onSubmit(formData);
+        setTxHash(result.txHash);
         
         // Step 2: Start Polling for Indexer
         setIsPolling(true);
