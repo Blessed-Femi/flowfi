@@ -17,7 +17,7 @@ import { parseStreamId } from "../lib/stream-id.js";
 import {
   DEFAULT_EVENTS_PAGE_SIZE,
   MAX_EVENTS_PAGE_SIZE,
-} from "../routes/v1/events.routes.js";
+} from "../repositories/streamEvent.repository.js";
 
 const DEFAULT_STREAM_PAGE_SIZE = 20;
 const MAX_STREAM_PAGE_SIZE = 100;
