@@ -695,10 +695,16 @@ export const getUserStreamSummary = async (
   }
 };
 
+const TOP_UP_AMOUNT_MAX_DIGITS = 30;
+
 const topUpBodySchema = z.object({
   amount: z
     .string()
-    .regex(/^\d+$/, "amount must be a positive integer string (XLM stroops)"),
+    .regex(/^\d+$/, "amount must be a positive integer string (XLM stroops)")
+    .max(
+      TOP_UP_AMOUNT_MAX_DIGITS,
+      `amount must be at most ${TOP_UP_AMOUNT_MAX_DIGITS} digits long`,
+    ),
 });
 
 /**
