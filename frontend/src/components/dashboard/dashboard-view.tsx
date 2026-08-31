@@ -140,7 +140,7 @@ function SkeletonCard({ className = "" }: { className?: string }) {
       aria-hidden="true"
     >
       {/* shimmer sweep */}
-      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="absolute inset-0 -translate-x-full motion-reduce:animate-none bg-gradient-to-r from-transparent via-white/10 to-transparent" />
     </div>
   );
 }
@@ -390,12 +390,17 @@ function renderAnalytics(snapshot: DashboardSnapshot | null) {
   );
 }
 
-function renderStreams(
-  snapshot: DashboardSnapshot | null,
-  onTopUp: (stream: Stream) => void,
-  onCancel: (stream: Stream) => void,
-  onShowDetails: (stream: Stream) => void,
-) {
+const StreamsTable = React.memo(function StreamsTable({
+  snapshot,
+  onTopUp,
+  onCancel,
+  onShowDetails,
+}: {
+  snapshot: DashboardSnapshot | null;
+  onTopUp: (stream: Stream) => void;
+  onCancel: (stream: Stream) => void;
+  onShowDetails: (stream: Stream) => void;
+}) {
   if (!snapshot) return null;
   return (
     <section className="dashboard-panel">
@@ -472,12 +477,15 @@ function renderStreams(
       </div>
     </section>
   );
-}
+});
 
-function renderRecentActivity(
-  snapshot: DashboardSnapshot | null,
-  onCreateStream?: () => void,
-) {
+const RecentActivityList = React.memo(function RecentActivityList({
+  snapshot,
+  onCreateStream,
+}: {
+  snapshot: DashboardSnapshot | null;
+  onCreateStream?: () => void;
+}) {
   if (!snapshot) return null;
 
   if (snapshot.recentActivity.length === 0) {
@@ -525,7 +533,7 @@ function renderRecentActivity(
       </ul>
     </section>
   );
-}
+});
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -594,6 +602,23 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const [withdrawingIncomingStreamId, setWithdrawingIncomingStreamId] =
     React.useState<string | null>(null);
   const [isFormSubmitting, setIsFormSubmitting] = React.useState(false);
+
+  const handleTopUp = React.useCallback(
+    (s: Stream) => setModal({ type: "topup", stream: s }),
+    [],
+  );
+  const handleCancel = React.useCallback(
+    (s: Stream) => setModal({ type: "cancel", stream: s }),
+    [],
+  );
+  const handleShowDetails = React.useCallback(
+    (s: Stream) => setModal({ type: "details", stream: s }),
+    [],
+  );
+  const handleShowWizard = React.useCallback(
+    () => setShowWizard(true),
+    [],
+  );
 
   const safeLoadTemplates = (): StreamTemplate[] => {
     try {
@@ -1008,13 +1033,13 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
         <div className="dashboard-content-stack mt-8">
           {renderStats(snapshot)}
           {renderAnalytics(snapshot)}
-          {renderStreams(
-            snapshot,
-            (s) => setModal({ type: "topup", stream: s }),
-            (s) => setModal({ type: "cancel", stream: s }),
-            (s) => setModal({ type: "details", stream: s }),
-          )}
-          {renderRecentActivity(snapshot, () => setShowWizard(true))}
+          <StreamsTable
+            snapshot={snapshot}
+            onTopUp={handleTopUp}
+            onCancel={handleCancel}
+            onShowDetails={handleShowDetails}
+          />
+          <RecentActivityList snapshot={snapshot} onCreateStream={handleShowWizard} />
         </div>
       );
     }
@@ -1057,6 +1082,14 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
           onCancel={(s) => setModal({ type: "cancel", stream: s })}
           onShowDetails={(s) => setModal({ type: "details", stream: s })}
         />
+        <div className="mt-8">
+          <StreamsTable
+            snapshot={{ ...snapshot!, outgoingStreams: activeOutgoing }}
+            onTopUp={handleTopUp}
+            onCancel={handleCancel}
+            onShowDetails={handleShowDetails}
+          />
+        </div>
       );
     }
 
@@ -1075,6 +1108,9 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
           recentActivity={snapshot!.recentActivity}
           onCreateStream={() => setShowWizard(true)}
         />
+        <div className="mt-8">
+          <RecentActivityList snapshot={snapshot} onCreateStream={handleShowWizard} />
+        </div>
       );
     }
 
