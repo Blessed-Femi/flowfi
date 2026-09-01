@@ -396,7 +396,6 @@ export class SorobanEventWorker {
     const finalCursor = hasError
       ? lastCursor
       : ((response as { latestCursor?: string }).latestCursor || lastCursor);
-      : (response as any).latestCursor || lastCursor;
 
     await prisma.indexerState.upsert({
       where: { id: INDEXER_STATE_ID },

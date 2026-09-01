@@ -1,4 +1,4 @@
-import { rateLimit, type Options } from 'express-rate-limit';
+import { type Options } from 'express-rate-limit';
 import { createRateLimiter } from './rate-limiter.middleware.js';
 import { type Request, type Response, type NextFunction } from 'express';
 import type { AuthenticatedRequest } from '../types/auth.types.js';

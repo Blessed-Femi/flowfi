@@ -656,7 +656,6 @@ router.post('/:streamId/withdraw', requireAuth, withdrawHandler);
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/:streamId/top-up', requireAuth, topUpStreamHandler);
-router.post('/:streamId/cancel', requireAuth, cancelStreamHandler);
 
 /**
  * @openapi
@@ -719,6 +718,6 @@ router.post('/:streamId/cancel', requireAuth, cancelStreamHandler);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/:streamId/cancel', requireAuth, cancelStreamHandler as any);
+router.post('/:streamId/cancel', requireAuth, cancelStreamHandler);
 
 export default router;
