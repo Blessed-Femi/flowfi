@@ -1,9 +1,8 @@
-import { EmptyState } from "./dashboard-view";
-import { BoltIcon } from "./dashboard-view";
+import type { Stream } from "@/lib/dashboard";
 
 interface DashboardPausedProps {
-  outgoingStreams: any[];
-  incomingStreams: any[];
+  outgoingStreams: Stream[];
+  incomingStreams: Stream[];
 }
 
 export function DashboardPaused({
@@ -11,8 +10,8 @@ export function DashboardPaused({
   incomingStreams,
 }: DashboardPausedProps) {
   const pausedStreams = [
-    ...outgoingStreams.filter((s: any) => s.status === "Paused"),
-    ...incomingStreams.filter((s: any) => s.status === "Paused"),
+    ...outgoingStreams.filter((s) => s.status === "Paused"),
+    ...incomingStreams.filter((s) => s.status === "Paused"),
   ];
 
   if (pausedStreams.length === 0) {
@@ -34,7 +33,7 @@ export function DashboardPaused({
           </tr>
         </thead>
         <tbody>
-          {pausedStreams.map((s: any) => (
+          {pausedStreams.map((s) => (
             <tr key={s.id}>
               <td>#{s.id}</td>
               <td className="font-mono text-xs">{s.recipient}</td>

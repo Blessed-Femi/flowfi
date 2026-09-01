@@ -1,12 +1,13 @@
 import { EmptyState } from "./dashboard-view";
 import { BoltIcon } from "./dashboard-view";
 import { Button } from "@/components/ui/Button";
+import type { Stream } from "@/lib/dashboard";
 
 interface DashboardOutgoingProps {
-  outgoingStreams: any[];
-  onTopUp: (stream: any) => void;
-  onCancel: (stream: any) => void;
-  onShowDetails: (stream: any) => void;
+  outgoingStreams: Stream[];
+  onTopUp: (stream: Stream) => void;
+  onCancel: (stream: Stream) => void;
+  onShowDetails: (stream: Stream) => void;
   setShowWizard: () => void;
 }
 
@@ -17,7 +18,7 @@ export function DashboardOutgoing({
   onShowDetails,
   setShowWizard,
 }: DashboardOutgoingProps) {
-  const activeOutgoing = outgoingStreams.filter((s: any) => s.status === "Active");
+  const activeOutgoing = outgoingStreams.filter((s) => s.status === "Active");
 
   if (activeOutgoing.length === 0) {
     return (
@@ -53,11 +54,11 @@ export function DashboardOutgoing({
               </tr>
             </thead>
             <tbody>
-              {activeOutgoing.map((stream: any) => (
+              {activeOutgoing.map((stream) => (
                 <tr
                   key={stream.id}
                   className="cursor-pointer hover:bg-white/5"
-                  onClick={(e: any) => {
+                  onClick={(e) => {
                     if ((e.target as HTMLElement).closest("button")) return;
                     onShowDetails(stream);
                   }}

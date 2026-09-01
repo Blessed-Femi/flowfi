@@ -1076,20 +1076,22 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
 
     if (activeTab === "outgoing") {
       return (
-        <DashboardOutgoingDynamic
-          outgoingStreams={snapshot!.outgoingStreams}
-          onTopUp={(s) => setModal({ type: "topup", stream: s })}
-          onCancel={(s) => setModal({ type: "cancel", stream: s })}
-          onShowDetails={(s) => setModal({ type: "details", stream: s })}
-        />
-        <div className="mt-8">
-          <StreamsTable
-            snapshot={{ ...snapshot!, outgoingStreams: activeOutgoing }}
-            onTopUp={handleTopUp}
-            onCancel={handleCancel}
-            onShowDetails={handleShowDetails}
+        <>
+          <DashboardOutgoingDynamic
+            outgoingStreams={snapshot!.outgoingStreams}
+            onTopUp={(s) => setModal({ type: "topup", stream: s })}
+            onCancel={(s) => setModal({ type: "cancel", stream: s })}
+            onShowDetails={(s) => setModal({ type: "details", stream: s })}
           />
-        </div>
+          <div className="mt-8">
+            <StreamsTable
+              snapshot={{ ...snapshot!, outgoingStreams: activeOutgoing }}
+              onTopUp={handleTopUp}
+              onCancel={handleCancel}
+              onShowDetails={handleShowDetails}
+            />
+          </div>
+        </>
       );
     }
 
@@ -1104,13 +1106,15 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
 
     if (activeTab === "activity") {
       return (
-        <DashboardActivityDynamic
-          recentActivity={snapshot!.recentActivity}
-          onCreateStream={() => setShowWizard(true)}
-        />
-        <div className="mt-8">
-          <RecentActivityList snapshot={snapshot} onCreateStream={handleShowWizard} />
-        </div>
+        <>
+          <DashboardActivityDynamic
+            recentActivity={snapshot!.recentActivity}
+            onCreateStream={() => setShowWizard(true)}
+          />
+          <div className="mt-8">
+            <RecentActivityList snapshot={snapshot} onCreateStream={handleShowWizard} />
+          </div>
+        </>
       );
     }
 

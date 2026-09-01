@@ -1,8 +1,7 @@
 import IncomingStreams from "../IncomingStreams";
 import type { Stream } from "@/lib/dashboard";
 import { EmptyState } from "./dashboard-view";
-import { ActivityIcon, BoltIcon, InboxIcon } from "./dashboard-view";
-import { Button } from "@/components/ui/Button";
+import { InboxIcon } from "./dashboard-view";
 
 interface DashboardIncomingProps {
   incomingStreams: Stream[];

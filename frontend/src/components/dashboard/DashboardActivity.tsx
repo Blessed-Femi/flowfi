@@ -1,9 +1,10 @@
 import { EmptyState } from "./dashboard-view";
 import { ActivityIcon } from "./dashboard-view";
 import { Button } from "@/components/ui/Button";
+import type { ActivityItem } from "@/lib/dashboard";
 
 interface DashboardActivityProps {
-  recentActivity: any[];
+  recentActivity: ActivityItem[];
   onCreateStream: () => void;
 }
 
@@ -42,8 +43,7 @@ export function DashboardActivity({
         <span>{recentActivity.length} items</span>
       </div>
       <ul className="activity-list">
-        {// @ts-expect-error activity uses any for dynamic stream data
-recentActivity.map((activity: any) => {
+        {recentActivity.map((activity) => {
           const amountPrefix = activity.direction === "received" ? "+" : "-";
           const amountClass = activity.direction === "received" ? "is-positive" : "is-negative";
           return (

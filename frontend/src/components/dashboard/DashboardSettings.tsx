@@ -1,7 +1,7 @@
-import { Button } from "@/components/ui/Button";
+import type { WalletSession } from "@/lib/wallet";
 
 interface DashboardSettingsProps {
-  session: any;
+  session: WalletSession;
   onDisconnect: () => void;
 }
 

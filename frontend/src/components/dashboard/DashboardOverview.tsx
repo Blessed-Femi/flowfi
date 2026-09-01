@@ -1,9 +1,13 @@
 "use client";
 
-import { DashboardSnapshot, fetchDashboardData, dashboardQueryKey } from "@/lib/dashboard";
+import * as React from "react";
+import type { DashboardSnapshot } from "@/lib/dashboard";
+import { fetchDashboardData, dashboardQueryKey } from "@/lib/dashboard";
 import { EmptyState } from "./dashboard-view";
-import { ActivityIcon, BoltIcon, InboxIcon } from "./dashboard-view";
+import { ActivityIcon } from "./dashboard-view";
 import { Button } from "@/components/ui/Button";
+import type { QueryClient } from "@tanstack/react-query";
+import type { WalletSession } from "@/lib/wallet";
 
 function renderStats(snapshot: DashboardSnapshot | null) {
   if (!snapshot) return null;
@@ -59,8 +63,7 @@ function renderRecentActivity(
         <span>{snapshot.recentActivity.length} items</span>
       </div>
       <ul className="activity-list">
-// @ts-expect-error unused
-{snapshot.recentActivity.map((activity: any) => {
+        {snapshot.recentActivity.map((activity) => {
           const amountPrefix = activity.direction === "received" ? "+" : "-";
           const amountClass = activity.direction === "received" ? "is-positive" : "is-negative";
           return (
@@ -86,14 +89,10 @@ interface DashboardOverviewProps {
   snapshot: DashboardSnapshot | null;
   isSnapshotLoading: boolean;
   snapshotError: string | null;
-  // @ts-expect-error unused
-// session uses any for dynamic wallet data
-session: any;
+  session: WalletSession;
   onDisconnect: () => void;
   setShowWizard: () => void;
-  // @ts-expect-error unused
-// queryClient uses any for dynamic query state
-queryClient: any;
+  queryClient: QueryClient;
 }
 
 export function DashboardOverview({
