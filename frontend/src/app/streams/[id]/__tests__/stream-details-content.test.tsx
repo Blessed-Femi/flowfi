@@ -22,7 +22,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-const { mockToast, mockSoroban, mockTracker } = vi.hoisted(() => {
+const { mockToast, mockSoroban, mockTracker, mockUseStreamingAmount } = vi.hoisted(() => {
   const mockToast = { success: vi.fn(), error: vi.fn() };
   const mockSoroban = {
     withdrawFromStream: vi.fn(),
@@ -43,7 +43,8 @@ const { mockToast, mockSoroban, mockTracker } = vi.hoisted(() => {
     succeed: vi.fn(),
     fail: vi.fn(),
   };
-  return { mockToast, mockSoroban, mockTracker };
+  const mockUseStreamingAmount = vi.fn(() => 123456789);
+  return { mockToast, mockSoroban, mockTracker, mockUseStreamingAmount };
 });
 
 vi.mock("react-hot-toast", () => ({
@@ -66,7 +67,7 @@ vi.mock("@/hooks/useStreamEvents", () => ({
 // (frontend/src/__tests__/useStreamingAmount.test.tsx); here we only verify
 // that the details page wires it into the "Claimable" stat card.
 vi.mock("@/hooks/useStreamingAmount", () => ({
-  useStreamingAmount: () => 123456789, // 12.3456789 XLM in stroops
+  useStreamingAmount: mockUseStreamingAmount,
 }));
 
 vi.mock("@/lib/soroban", () => mockSoroban);
@@ -236,6 +237,8 @@ describe("StreamDetailsContent loading skeleton", () => {
 
     // Once the stream loads, the Claimable stat card should show the value
     // returned by the shared hook, formatted in token units (stroops → XLM).
+    // Note: LiveValue renders an sr-only screen-reader span with the same text,
+    // so we use getAllByText to handle the duplicate.
     await waitFor(() => {
       expect(screen.getAllByText(/12\.3456789 XLM/).length).toBeGreaterThanOrEqual(1);
     });
@@ -320,6 +323,7 @@ describe("StreamDetailsContent handleWithdraw", () => {
   });
 
   it("disables the withdraw button when liveClaimable is zero", async () => {
+    mockUseStreamingAmount.mockReturnValue(0);
     await renderLoaded({
       depositedAmount: "1000",
       withdrawnAmount: "1000",
