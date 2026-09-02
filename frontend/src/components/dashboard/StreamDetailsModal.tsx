@@ -76,7 +76,7 @@ export const StreamDetailsModal: React.FC<StreamDetailsModalProps> = ({
                                 <button
                                     onClick={handleCopyRecipient}
                                     aria-label={recipientCopied ? "Recipient address copied" : "Copy recipient address"}
-                                    className="text-slate-500 hover:text-accent transition-colors"
+                                    className="text-slate-500 dark:text-slate-400 hover:text-accent transition-colors"
                                 >
                                     {recipientCopied ? (
                                         <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
