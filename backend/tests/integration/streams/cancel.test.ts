@@ -141,4 +141,54 @@ describe('POST /v1/streams/:streamId/cancel', () => {
     expect(res.status).toBe(409);
     expect(res.body.message).toContain('already cancelled');
   });
+
+  it('handles concurrent cancel requests correctly', async () => {
+    const streamId = 123;
+    const mockStream = {
+      streamId,
+      sender: 'G_SENDER_123',
+      isActive: true,
+    };
+
+    // Both requests observe the active stream, so each performs its own
+    // on-chain cancel and marks the stream inactive.
+    (prisma.stream.findUnique as any).mockResolvedValue(mockStream);
+    (prisma.stream.update as any).mockResolvedValue({ ...mockStream, isActive: false });
+    (sorobanService.cancelStream as any).mockResolvedValue('tx_hash_123');
+
+    // Run two concurrent cancel requests
+    const promise1 = request(app)
+      .post(`/v1/streams/${streamId}/cancel`)
+      .set('Authorization', 'Bearer dummy_token');
+    const promise2 = request(app)
+      .post(`/v1/streams/${streamId}/cancel`)
+      .set('Authorization', 'Bearer dummy_token');
+
+    const [res1, res2] = await Promise.all([promise1, promise2]);
+
+    // Both should return 200 with CANCELLED status
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+    expect(res1.body).toEqual({
+      txHash: 'tx_hash_123',
+      status: 'CANCELLED',
+    });
+    expect(res2.body).toEqual({
+      txHash: 'tx_hash_123',
+      status: 'CANCELLED',
+    });
+
+    // Each request performs its own on-chain cancel call
+    expect(sorobanService.cancelStream).toHaveBeenCalledTimes(2);
+    expect(sorobanService.cancelStream).toHaveBeenCalledWith(BigInt(streamId), 'S_SECRET_123');
+
+    // Stream should be marked as inactive via the repository helper
+    expect(prisma.stream.update).toHaveBeenCalledWith({
+      where: { streamId: BigInt(streamId) },
+      data: { isActive: false },
+    });
+
+    // Both responses should reference the same transaction hash
+    expect(res1.body.txHash).toBe(res2.body.txHash);
+  });
 });
