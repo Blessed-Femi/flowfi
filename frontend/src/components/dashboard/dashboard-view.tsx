@@ -40,9 +40,6 @@ import {
   getTokenAddress,
   toSorobanErrorMessage,
 } from "@/lib/soroban";
-import { validateStreamForm, type StreamFormData as SharedStreamFormData } from "@/lib/stream-validation";
-import { useStreamForm } from "@/hooks/useStreamForm";
-import IncomingStreams from "../IncomingStreams";
 import { useStreamEvents } from "@/hooks/useStreamEvents";
 import { SSEStatusIndicator } from "./SSEStatusIndicator";
 import {
@@ -52,34 +49,34 @@ import {
 import { TopUpModal } from "../stream-creation/TopUpModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { CancelConfirmModal } from "../stream-creation/CancelConfirmModal";
-import { ConfirmModal } from "../stream-creation/ConfirmModal";
 import { StreamDetailsModal } from "./StreamDetailsModal";
 import { Button } from "../ui/Button";
 
 // @ts-expect-error unused var
-const DashboardOverviewDynamic = dynamic(() => import("./DashboardOverview"), {
-  ssr: false,
-});
-// @ts-expect-error unused var
-const DashboardIncomingDynamic = dynamic(() => import("./DashboardIncoming"), {
-  ssr: false,
-});
-// @ts-expect-error unused var
-const DashboardOutgoingDynamic = dynamic(() => import("./DashboardOutgoing"), {
-  ssr: false,
-});
-// @ts-expect-error unused var
-const DashboardPausedDynamic = dynamic(() => import("./DashboardPaused"), {
-  ssr: false,
-});
-// @ts-expect-error unused var
-const DashboardActivityDynamic = dynamic(() => import("./DashboardActivity"), {
-  ssr: false,
-});
-// @ts-expect-error unused var
-const DashboardSettingsDynamic = dynamic(() => import("./DashboardSettings"), {
-  ssr: false,
-});
+const DashboardOverviewDynamic = dynamic(
+  () => import("./DashboardOverview").then((m) => m.DashboardOverview),
+  { ssr: false },
+);
+const DashboardIncomingDynamic = dynamic(
+  () => import("./DashboardIncoming").then((m) => m.DashboardIncoming),
+  { ssr: false },
+);
+const DashboardOutgoingDynamic = dynamic(
+  () => import("./DashboardOutgoing").then((m) => m.DashboardOutgoing),
+  { ssr: false },
+);
+const DashboardPausedDynamic = dynamic(
+  () => import("./DashboardPaused").then((m) => m.DashboardPaused),
+  { ssr: false },
+);
+const DashboardActivityDynamic = dynamic(
+  () => import("./DashboardActivity").then((m) => m.DashboardActivity),
+  { ssr: false },
+);
+const DashboardSettingsDynamic = dynamic(
+  () => import("./DashboardSettings").then((m) => m.DashboardSettings),
+  { ssr: false },
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,33 +94,7 @@ type ModalState =
   | null
   | { type: "topup"; stream: Stream }
   | { type: "cancel"; stream: Stream }
-  | { type: "details"; stream: Stream }
-  | { type: "deleteTemplate"; templateId: string; templateName: string };
-
-interface StreamFormValues {
-  recipient: string;
-  token: string;
-  totalAmount: string;
-  startsAt: string;
-  endsAt: string;
-  cadenceSeconds: string;
-  note: string;
-}
-
-interface StreamTemplate {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  values: StreamFormValues;
-}
-
-type StreamFormMessageTone = "info" | "success" | "error";
-
-interface StreamFormMessageState {
-  text: string;
-  tone: StreamFormMessageTone;
-}
+  | { type: "details"; stream: Stream };
 
 const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: "overview", label: "Overview" },
@@ -292,18 +263,6 @@ export function ActivityIcon() {
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
-
-const STREAM_TEMPLATES_STORAGE_KEY = "flowfi.stream.templates.v1";
-
-const EMPTY_STREAM_FORM: StreamFormValues = {
-  recipient: "",
-  token: "USDC",
-  totalAmount: "",
-  startsAt: "",
-  endsAt: "",
-  cadenceSeconds: "1",
-  note: "",
-};
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -591,13 +550,6 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
           "resumed",
         ];
         if (relevantTypes.includes(latestEvent.type)) {
-          fetchDashboardData(session.publicKey)
-            .then(setSnapshot)
-            .catch((err) => {
-              setSnapshotError(
-                err instanceof Error ? err.message : "Failed to refresh dashboard",
-              );
-            });
           void queryClient.invalidateQueries({
             queryKey: dashboardQueryKey(session.publicKey),
           });
@@ -606,27 +558,8 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
     }
   }, [streamEvents, session.publicKey, queryClient]);
 
-  const [streamForm, setStreamForm] =
-    React.useState<StreamFormValues>(EMPTY_STREAM_FORM);
-  const streamFormHook = useStreamForm({
-    walletPublicKey: session.publicKey,
-    initialData: { token: streamForm.token },
-  });
-  const [templates, setTemplates] = React.useState<StreamTemplate[]>([]);
-  const [templatesHydrated, setTemplatesHydrated] = React.useState(false);
-  const [templateNameInput, setTemplateNameInput] = React.useState("");
-  const [editingTemplateId, setEditingTemplateId] = React.useState<
-    string | null
-  >(null);
-  const [selectedTemplateId, setSelectedTemplateId] = React.useState<
-    string | null
-  >(null);
-  const [streamFormMessage, setStreamFormMessage] =
-    React.useState<StreamFormMessageState | null>(null);
-
   const [withdrawingIncomingStreamId, setWithdrawingIncomingStreamId] =
     React.useState<string | null>(null);
-  const [isFormSubmitting, setIsFormSubmitting] = React.useState(false);
 
   const handleTopUp = React.useCallback(
     (s: Stream) => setModal({ type: "topup", stream: s }),
@@ -644,199 +577,6 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
     () => setShowWizard(true),
     [],
   );
-
-  const safeLoadTemplates = (): StreamTemplate[] => {
-    try {
-      if (typeof window === "undefined") return [];
-      const stored = localStorage.getItem(STREAM_TEMPLATES_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const persistTemplates = (items: StreamTemplate[]) => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(STREAM_TEMPLATES_STORAGE_KEY, JSON.stringify(items));
-  };
-
-  const formatTemplateUpdatedAt = (iso: string) => {
-    const d = new Date(iso);
-    return isNaN(d.getTime()) ? iso : d.toLocaleDateString();
-  };
-
-  const isTemplateNameValid = templateNameInput.trim().length > 0;
-  const saveTemplateButtonLabel = editingTemplateId
-    ? "Update Template"
-    : "Save Template";
-  const requiredFieldsCompleted = Object.values(streamForm).filter(
-    (v) => v.trim().length > 0,
-  ).length;
-
-  const handleClearTemplateEditor = () => {
-    setTemplateNameInput("");
-    setEditingTemplateId(null);
-  };
-
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setTemplates(safeLoadTemplates());
-      setTemplatesHydrated(true);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
-
-  React.useEffect(() => {
-    if (!templatesHydrated) return;
-    persistTemplates(templates);
-  }, [templates, templatesHydrated]);
-
-  // ── Load dashboard snapshot ───────────────────────────────────────────────
-
-  const loadSnapshot = React.useCallback(async () => {
-    setIsSnapshotLoading(true);
-    setSnapshotError(null);
-    try {
-      const next = await fetchDashboardData(session.publicKey);
-      setSnapshot(next);
-    } catch (err) {
-      setSnapshot(null);
-      setSnapshotError(
-        err instanceof Error ? err.message : "Failed to fetch dashboard data.",
-      );
-    } finally {
-      setIsSnapshotLoading(false);
-    }
-  }, [session.publicKey, setIsSnapshotLoading, setSnapshotError, setSnapshot]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setIsSnapshotLoading(true);
-      setSnapshotError(null);
-      try {
-        const next = await fetchDashboardData(session.publicKey);
-        if (!cancelled) setSnapshot(next);
-      } catch (err) {
-        if (!cancelled) {
-          setSnapshot(null);
-          setSnapshotError(
-            err instanceof Error ? err.message : "Failed to fetch dashboard data.",
-          );
-        }
-      } finally {
-        if (!cancelled) setIsSnapshotLoading(false);
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [session.publicKey]);
-
-  // ── Template handlers ─────────────────────────────────────────────────────
-
-  const updateStreamForm = (field: keyof StreamFormValues, value: string) => {
-    setStreamForm((prev) => ({ ...prev, [field]: value }));
-    setStreamFormMessage(null);
-    if (field === "token") {
-      streamFormHook.updateFormData({ token: value });
-    }
-  };
-
-  const handleApplyTemplate = (templateId: string) => {
-    const template = templates.find((t) => t.id === templateId);
-    if (!template) return;
-    setStreamForm({ ...template.values });
-    setSelectedTemplateId(template.id);
-    setStreamFormMessage({
-      text: `Applied template "${template.name}". You can still adjust any field.`,
-      tone: "success",
-    });
-  };
-
-  const handleSaveTemplate = () => {
-    const cleanedName = templateNameInput.trim();
-    if (!cleanedName) {
-      setStreamFormMessage({
-        text: "Template name is required.",
-        tone: "error",
-      });
-      return;
-    }
-    const now = new Date().toISOString();
-    if (editingTemplateId) {
-      setTemplates((prev) =>
-        prev.map((t) =>
-          t.id === editingTemplateId
-            ? {
-                ...t,
-                name: cleanedName,
-                updatedAt: now,
-                values: { ...streamForm },
-              }
-            : t,
-        ),
-      );
-      setStreamFormMessage({
-        text: `Template "${cleanedName}" updated.`,
-        tone: "success",
-      });
-      setSelectedTemplateId(editingTemplateId);
-      setEditingTemplateId(null);
-      setTemplateNameInput("");
-      return;
-    }
-    const newTemplate: StreamTemplate = {
-      id: `template-${Date.now()}`,
-      name: cleanedName,
-      createdAt: now,
-      updatedAt: now,
-      values: { ...streamForm },
-    };
-    setTemplates((prev) => [newTemplate, ...prev]);
-    setSelectedTemplateId(newTemplate.id);
-    setTemplateNameInput("");
-    setStreamFormMessage({
-      text: `Template "${cleanedName}" saved.`,
-      tone: "success",
-    });
-  };
-
-  const handleEditTemplate = (templateId: string) => {
-    const template = templates.find((t) => t.id === templateId);
-    if (!template) return;
-    setEditingTemplateId(template.id);
-    setTemplateNameInput(template.name);
-    setSelectedTemplateId(template.id);
-    setStreamForm({ ...template.values });
-    setStreamFormMessage({
-      text: `Editing template "${template.name}". Save to overwrite it.`,
-      tone: "info",
-    });
-  };
-
-  const handleDeleteTemplate = (templateId: string) => {
-    const template = templates.find((t) => t.id === templateId);
-    if (!template) return;
-    setModal({ type: "deleteTemplate", templateId: template.id, templateName: template.name });
-  };
-
-  const handleDeleteTemplateConfirm = (templateId: string) => {
-    setTemplates((prev) => prev.filter((t) => t.id !== templateId));
-    if (selectedTemplateId === templateId) setSelectedTemplateId(null);
-    if (editingTemplateId === templateId) {
-      setEditingTemplateId(null);
-      setTemplateNameInput("");
-    }
-    setModal(null);
-  };
-
-  const handleResetStreamForm = () => {
-    setStreamForm(EMPTY_STREAM_FORM);
-    setSelectedTemplateId(null);
-    setStreamFormMessage(null);
-  };
 
   // ── Optimistic helpers ─────────────────────────────────────────────────────
 
@@ -966,79 +706,6 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
     }
   };
 
-  const handleFormCreateStream = async (
-    event: React.FormEvent<HTMLFormElement>,
-  ) => {
-    event.preventDefault();
-    const hasRequiredFields =
-      streamForm.recipient.trim() &&
-      streamForm.token.trim() &&
-      streamForm.totalAmount.trim() &&
-      streamForm.startsAt.trim() &&
-      streamForm.endsAt.trim();
-    if (!hasRequiredFields) {
-      setStreamFormMessage({
-        text: "Complete all required fields before creating.",
-        tone: "error",
-      });
-      return;
-    }
-
-    // ── Date-specific validation (unique to this form layout) ────────────
-    const startDate = new Date(streamForm.startsAt);
-    const endDate = new Date(streamForm.endsAt);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      setStreamFormMessage({
-        text: "Start and end times must be valid dates.",
-        tone: "error",
-      });
-      return;
-    }
-    const durationSeconds = Math.floor(
-      (endDate.getTime() - startDate.getTime()) / 1000,
-    );
-    if (durationSeconds <= 0) {
-      setStreamFormMessage({
-        text: "End time must be after start time.",
-        tone: "error",
-      });
-      return;
-    }
-
-    // ── Shared validation (recipient format, amount precision, balance) ──
-    const canonicalData: SharedStreamFormData = {
-      recipient: streamForm.recipient.trim(),
-      token: streamForm.token.trim(),
-      amount: streamForm.totalAmount.trim(),
-      duration: String(durationSeconds),
-      durationUnit: "seconds",
-    };
-    const sharedErrors = validateStreamForm(canonicalData, {
-      walletBalance: streamFormHook.walletBalance,
-    });
-    if (Object.keys(sharedErrors).length > 0) {
-      const firstError = Object.values(sharedErrors)[0];
-      setStreamFormMessage({
-        text: firstError ?? "Validation failed.",
-        tone: "error",
-      });
-      return;
-    }
-
-    setIsFormSubmitting(true);
-    try {
-      await handleCreateStream(canonicalData);
-      handleResetStreamForm();
-      setStreamFormMessage({
-        text: "Stream submitted to wallet and confirmed on-chain.",
-        tone: "success",
-      });
-    } catch (err) {
-      setStreamFormMessage({ text: toSorobanErrorMessage(err), tone: "error" });
-    } finally {
-      setIsFormSubmitting(false);
-    }
-  };
 
   // ── Tab content ───────────────────────────────────────────────────────────
 
@@ -1096,25 +763,6 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       );
     }
 
-    // ── Non-default tabs: lazy-loaded via next/dynamic ─────────────────────
-    const tabComponents: Record<string, React.ComponentType> = {
-      incoming: DashboardIncomingDynamic,
-      outgoing: DashboardOutgoingDynamic,
-      paused: DashboardPausedDynamic,
-      activity: DashboardActivityDynamic,
-      settings: DashboardSettingsDynamic,
-    };
-
-    const TabComponent = tabComponents[activeTab];
-    if (!TabComponent) {
-      return (
-        <div className="dashboard-empty-state mt-8">
-          <h2>Under Construction</h2>
-          <p>This tab is currently under development.</p>
-        </div>
-      );
-    }
-
     // Pass required props to each tab component
     if (activeTab === "incoming") {
       return (
@@ -1128,22 +776,13 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
 
     if (activeTab === "outgoing") {
       return (
-        <>
-          <DashboardOutgoingDynamic
-            outgoingStreams={snapshot!.outgoingStreams}
-            onTopUp={(s) => setModal({ type: "topup", stream: s })}
-            onCancel={(s) => setModal({ type: "cancel", stream: s })}
-            onShowDetails={(s) => setModal({ type: "details", stream: s })}
-          />
-          <div className="mt-8">
-            <StreamsTable
-              snapshot={{ ...snapshot!, outgoingStreams: activeOutgoing }}
-              onTopUp={handleTopUp}
-              onCancel={handleCancel}
-              onShowDetails={handleShowDetails}
-            />
-          </div>
-        </>
+        <DashboardOutgoingDynamic
+          outgoingStreams={snapshot!.outgoingStreams}
+          onTopUp={(s) => setModal({ type: "topup", stream: s })}
+          onCancel={(s) => setModal({ type: "cancel", stream: s })}
+          onShowDetails={(s) => setModal({ type: "details", stream: s })}
+          setShowWizard={() => setShowWizard(true)}
+        />
       );
     }
 
@@ -1158,15 +797,10 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
 
     if (activeTab === "activity") {
       return (
-        <>
-          <DashboardActivityDynamic
-            recentActivity={snapshot!.recentActivity}
-            onCreateStream={() => setShowWizard(true)}
-          />
-          <div className="mt-8">
-            <RecentActivityList snapshot={snapshot} onCreateStream={handleShowWizard} />
-          </div>
-        </>
+        <DashboardActivityDynamic
+          recentActivity={snapshot!.recentActivity}
+          onCreateStream={() => setShowWizard(true)}
+        />
       );
     }
 
@@ -1295,17 +929,6 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
             setModal({ type: "cancel", stream: modal.stream })
           }
           onTopUpClick={() => setModal({ type: "topup", stream: modal.stream })}
-        />
-      )}
-      {modal?.type === "deleteTemplate" && (
-        <ConfirmModal
-          title="Delete Template?"
-          message={`Are you sure you want to delete "${modal.templateName}"? This action cannot be undone.`}
-          confirmLabel="Delete Template"
-          cancelLabel="Keep Template"
-          variant="danger"
-          onConfirm={() => handleDeleteTemplateConfirm(modal.templateId)}
-          onClose={() => setModal(null)}
         />
       )}
     </main>

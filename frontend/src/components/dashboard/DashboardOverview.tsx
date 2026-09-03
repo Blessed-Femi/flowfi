@@ -114,11 +114,6 @@ export function DashboardOverview({
       });
   }, [session.publicKey, queryClient]);
 
-  const hasNoStreams =
-    !snapshot ||
-    (snapshot.outgoingStreams.length === 0 &&
-      snapshot.incomingStreams.length === 0);
-
   return (
     <div className="dashboard-content-stack mt-8">
       {renderStats(snapshot)}
