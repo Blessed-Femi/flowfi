@@ -18,7 +18,7 @@ import toast from "react-hot-toast";
 
 import {
   getDashboardAnalytics,
-  fetchDashboardData,
+  useDashboard,
   dashboardQueryKey,
   type DashboardSnapshot,
   type Stream,
@@ -51,6 +51,7 @@ import {
 import { TopUpModal } from "../stream-creation/TopUpModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { CancelConfirmModal } from "../stream-creation/CancelConfirmModal";
+import { ConfirmModal } from "../stream-creation/ConfirmModal";
 import { StreamDetailsModal } from "./StreamDetailsModal";
 import { Button } from "../ui/Button";
 
@@ -70,7 +71,8 @@ type ModalState =
   | null
   | { type: "topup"; stream: Stream }
   | { type: "cancel"; stream: Stream }
-  | { type: "details"; stream: Stream };
+  | { type: "details"; stream: Stream }
+  | { type: "deleteTemplate"; templateId: string; templateName: string };
 
 interface StreamFormValues {
   recipient: string;
@@ -526,11 +528,20 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const [showWizard, setShowWizard] = React.useState(false);
   const [modal, setModal] = React.useState<ModalState>(null);
 
-  const [snapshot, setSnapshot] = React.useState<DashboardSnapshot | null>(
-    null,
-  );
-  const [isSnapshotLoading, setIsSnapshotLoading] = React.useState(true);
-  const [snapshotError, setSnapshotError] = React.useState<string | null>(null);
+  const {
+    data: snapshotData,
+    isLoading: isSnapshotLoading,
+    isError: isSnapshotError,
+    error: snapshotErrorObj,
+    refetch: refetchSnapshot,
+  } = useDashboard(session.publicKey);
+
+  const snapshot: DashboardSnapshot | null = snapshotData ?? null;
+  const snapshotError = isSnapshotError
+    ? snapshotErrorObj instanceof Error
+      ? snapshotErrorObj.message
+      : "Failed to fetch dashboard data."
+    : null;
 
   const {
     events: streamEvents,
@@ -556,15 +567,9 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
           "resumed",
         ];
         if (relevantTypes.includes(latestEvent.type)) {
-          fetchDashboardData(session.publicKey)
-            .then(setSnapshot)
-            .catch((err) => {
-              setSnapshotError(
-                err instanceof Error
-                  ? err.message
-                  : "Failed to refresh dashboard",
-              );
-            });
+          void queryClient.invalidateQueries({
+            queryKey: dashboardQueryKey(session.publicKey),
+          });
         }
       }
     }
@@ -655,51 +660,6 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
     persistTemplates(templates);
   }, [templates, templatesHydrated]);
 
-  // ── Load dashboard snapshot ───────────────────────────────────────────────
-
-  const loadSnapshot = React.useCallback(async () => {
-    setIsSnapshotLoading(true);
-    setSnapshotError(null);
-    try {
-      const next = await fetchDashboardData(session.publicKey);
-      setSnapshot(next);
-    } catch (err) {
-      setSnapshot(null);
-      setSnapshotError(
-        err instanceof Error ? err.message : "Failed to fetch dashboard data.",
-      );
-    } finally {
-      setIsSnapshotLoading(false);
-    }
-  }, [session.publicKey, setIsSnapshotLoading, setSnapshotError, setSnapshot]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setIsSnapshotLoading(true);
-      setSnapshotError(null);
-      try {
-        const next = await fetchDashboardData(session.publicKey);
-        if (!cancelled) setSnapshot(next);
-      } catch (err) {
-        if (!cancelled) {
-          setSnapshot(null);
-          setSnapshotError(
-            err instanceof Error
-              ? err.message
-              : "Failed to fetch dashboard data.",
-          );
-        }
-      } finally {
-        if (!cancelled) setIsSnapshotLoading(false);
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [session.publicKey]);
-
   // ── Template handlers ─────────────────────────────────────────────────────
 
   const updateStreamForm = (field: keyof StreamFormValues, value: string) => {
@@ -785,13 +745,17 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const handleDeleteTemplate = (templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
     if (!template) return;
-    if (!window.confirm(`Delete stream template "${template.name}"?`)) return;
+    setModal({ type: "deleteTemplate", templateId: template.id, templateName: template.name });
+  };
+
+  const handleDeleteTemplateConfirm = (templateId: string) => {
     setTemplates((prev) => prev.filter((t) => t.id !== templateId));
     if (selectedTemplateId === templateId) setSelectedTemplateId(null);
     if (editingTemplateId === templateId) {
       setEditingTemplateId(null);
       setTemplateNameInput("");
     }
+    setModal(null);
   };
 
   const handleResetStreamForm = () => {
@@ -818,15 +782,18 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   };
 
   const topUpStreamLocally = (streamId: string, amount: number) => {
-    setSnapshot((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        outgoingStreams: prev.outgoingStreams.map((s) =>
-          s.id === streamId ? { ...s, deposited: s.deposited + amount } : s,
-        ),
-      };
-    });
+    queryClient.setQueryData<DashboardSnapshot | undefined>(
+      dashboardQueryKey(session.publicKey),
+      (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          outgoingStreams: prev.outgoingStreams.map((s) =>
+            s.id === streamId ? { ...s, deposited: s.deposited + amount } : s,
+          ),
+        };
+      },
+    );
   };
 
   const addStreamLocally = (data: StreamFormData) => {
@@ -843,14 +810,17 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       lastUpdateTime: Math.floor(Date.now() / 1000),
       isActive: true,
     };
-    setSnapshot((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        outgoingStreams: [newStream, ...prev.outgoingStreams],
-        activeStreamsCount: prev.activeStreamsCount + 1,
-      };
-    });
+    queryClient.setQueryData<DashboardSnapshot | undefined>(
+      dashboardQueryKey(session.publicKey),
+      (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          outgoingStreams: [newStream, ...prev.outgoingStreams],
+          activeStreamsCount: prev.activeStreamsCount + 1,
+        };
+      },
+    );
   };
 
   // ── Contract handlers ─────────────────────────────────────────────────────
@@ -858,7 +828,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
   const handleCreateStream = async (data: StreamFormData) => {
     const toastId = toast.loading("Creating stream…");
     try {
-      await sorobanCreateStream(session, {
+      const result = await sorobanCreateStream(session, {
         recipient: data.recipient,
         tokenAddress: getTokenAddress(data.token),
         amount: toBaseUnits(data.amount),
@@ -867,6 +837,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       addStreamLocally(data);
       // We don't call setShowWizard(false) here anymore, the wizard handles its own flow
       toast.success("Transaction confirmed on-chain!", { id: toastId });
+      return result;
     } catch (err) {
       toast.error(toSorobanErrorMessage(err), { id: toastId });
       throw err;
@@ -911,8 +882,7 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
       await sorobanWithdraw(session, {
         streamId: BigInt(stream.id.replace(/\D/g, "") || "0"),
       });
-      const refreshed = await fetchDashboardData(session.publicKey);
-      setSnapshot(refreshed);
+      await refetchSnapshot();
       toast.success("Withdrawal successful!", { id: toastId });
     } catch (err) {
       toast.error(toSorobanErrorMessage(err), { id: toastId });
@@ -1006,7 +976,12 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
 
     // ── Error state ───────────────────────────────────────────────────────
     if (snapshotError) {
-      return <ErrorState message={snapshotError} onRetry={loadSnapshot} />;
+      return (
+        <ErrorState
+          message={snapshotError}
+          onRetry={() => void refetchSnapshot()}
+        />
+      );
     }
 
     // ── First-time / completely empty wallet ──────────────────────────────
@@ -1514,6 +1489,17 @@ export function DashboardView({ session, onDisconnect }: DashboardViewProps) {
             setModal({ type: "cancel", stream: modal.stream })
           }
           onTopUpClick={() => setModal({ type: "topup", stream: modal.stream })}
+        />
+      )}
+      {modal?.type === "deleteTemplate" && (
+        <ConfirmModal
+          title="Delete Template?"
+          message={`Are you sure you want to delete "${modal.templateName}"? This action cannot be undone.`}
+          confirmLabel="Delete Template"
+          cancelLabel="Keep Template"
+          variant="danger"
+          onConfirm={() => handleDeleteTemplateConfirm(modal.templateId)}
+          onClose={() => setModal(null)}
         />
       )}
     </main>
